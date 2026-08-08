@@ -1,6 +1,6 @@
 # Calendar Handbook
 
-Client-side Vintage Story 1.22 mod. Press **L** (rebindable in Controls) to open a year calendar: current date, season progress, and a grid for every day of every month.
+Client-side Vintage Story 1.22 mod. Press **L** (rebindable in Controls) to open a year calendar: current date and time of day, season progress, and a grid for every day of every month.
 
 Month names come from `Lang.Get("month-January")` … so calendar-name mods such as Elder Scrolls Calendar apply automatically.
 
@@ -34,7 +34,7 @@ Restart Vintage Story after copying. If an old loose `Mods\calendarhandbook\` fo
 1. Main menu → Mod Manager: **Calendar Handbook** listed.
 2. Load a survival world (default 9 days/month).
 3. Press **L**: dialog opens; **L** / close X closes it.
-4. Header matches character panel **C** date.
+4. Header matches character panel **C** date, and the trailing HH:MM clock ticks forward while the dialog stays open.
 5. Year stat bar is spring→winter; on 6 Sun's Height it should be about halfway through summer.
 6. Under the seasons: days until winter/spring on the left, live HH:MM:ss countdown on the right.
 7. Month grids start at May / Second Seed and wrap to April; past days dim, today highlighted and centered.

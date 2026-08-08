@@ -9,16 +9,22 @@ public sealed class GuiDialogCalendarHandbook : GuiDialog
 {
     public const string HotkeyCode = "calendarhandbook";
     private const string ComposerName = "calendarhandbook";
+    private const string ClockKey = "timeofday";
     private const string DaysUntilKey = "daysuntil";
     private const string CountdownKey = "seasoncountdown";
+
+    /// <summary>Unscaled px between the date header and the clock, roughly two spaces at the header font size.</summary>
+    private const int ClockGap = 14;
 
     private static readonly double[] PastTextColor = { 0.55, 0.50, 0.42, 0.9 };
     private static readonly double[] TodayTextColor = { 0.98, 0.86, 0.45, 1.0 };
     private static readonly double[] FutureTextColor = { 0.95, 0.92, 0.84, 1.0 };
+    private static readonly double[] ClockTextColor = { 0.96, 0.89, 0.73, 1.0 };
 
     private YearCalendarModel? model;
     private double countdownSeconds;
     private float countdownRefreshTimer;
+    private string lastClockText = "";
     private string lastDaysUntilText = "";
     private string lastCountdownText = "";
 
@@ -56,20 +62,30 @@ public sealed class GuiDialogCalendarHandbook : GuiDialog
         countdownSeconds = Math.Max(0, countdownSeconds - deltaTime);
         countdownRefreshTimer += deltaTime;
 
-        if (!capi.IsGamePaused && countdownRefreshTimer >= 1f)
+        if (countdownRefreshTimer < 1f)
         {
-            countdownRefreshTimer = 0f;
-            model = new YearCalendarModel(capi);
-            countdownSeconds = model.RealSecondsUntilTargetSeason;
-            UpdateInfoTexts(force: true);
             return;
         }
 
-        if (countdownRefreshTimer >= 1f)
+        countdownRefreshTimer = 0f;
+
+        // While paused the calendar is frozen, so keep the last clock reading and only run the countdown down.
+        if (!capi.IsGamePaused)
         {
-            countdownRefreshTimer = 0f;
-            UpdateInfoTexts(force: true);
+            YearCalendarModel updated = new YearCalendarModel(capi);
+
+            // A day rollover moves the highlighted cell and can resize the date header, so rebuild the whole layout.
+            if (model == null || updated.DayOfYear != model.DayOfYear || updated.Year != model.Year)
+            {
+                ComposeDialog();
+                return;
+            }
+
+            model = updated;
+            countdownSeconds = model.RealSecondsUntilTargetSeason;
         }
+
+        UpdateInfoTexts(force: true);
     }
 
     private void ComposeDialog()
@@ -77,6 +93,7 @@ public sealed class GuiDialogCalendarHandbook : GuiDialog
         model = new YearCalendarModel(capi);
         countdownSeconds = model.RealSecondsUntilTargetSeason;
         countdownRefreshTimer = 0f;
+        lastClockText = "";
         lastDaysUntilText = "";
         lastCountdownText = "";
 
@@ -113,7 +130,20 @@ public sealed class GuiDialogCalendarHandbook : GuiDialog
         int gridsHeight = monthRows * monthInnerHeight + (monthRows - 1) * monthGapY;
         int dayTextPad = Math.Max(1, (dayCell - (int)GuiStyle.DetailFontSize) / 2);
 
+        CairoFont titleFont = CairoFont.WhiteSmallishText();
+        CairoFont clockFont = CairoFont.WhiteSmallishText().WithColor(ClockTextColor);
+        CairoFont detailFont = CairoFont.WhiteDetailText().WithColor(FutureTextColor);
+        CairoFont countdownFont = CairoFont.WhiteDetailText().WithColor(FutureTextColor).WithOrientation(EnumTextOrientation.Right);
+        CairoFont pastDayFont = CairoFont.WhiteDetailText().WithColor(PastTextColor);
+        CairoFont todayDayFont = CairoFont.WhiteDetailText().WithColor(TodayTextColor);
+        CairoFont futureDayFont = CairoFont.WhiteDetailText().WithColor(FutureTextColor);
+
+        // Shrink the date box to its text so the clock can sit right after it regardless of month name length.
         ElementBounds dateBounds = ElementBounds.Fixed(left, dateY, gridsWidth - 180, dateHeight);
+        titleFont.AutoBoxSize(model.DateHeader, dateBounds, false);
+        dateBounds.fixedHeight = dateHeight;
+
+        ElementBounds clockBounds = ElementBounds.Fixed(left + dateBounds.fixedWidth + ClockGap, dateY, 140, dateHeight);
         ElementBounds progressLabelBounds = ElementBounds.Fixed(left + gridsWidth - 170, dateY + 6, 170, 22);
         ElementBounds barBounds = ElementBounds.Fixed(left, barY, gridsWidth, barHeight);
         ElementBounds daysUntilBounds = ElementBounds.Fixed(left, infoY, gridsWidth / 2 - 8, infoRowHeight);
@@ -123,13 +153,6 @@ public sealed class GuiDialogCalendarHandbook : GuiDialog
         ElementBounds dialogBounds = ElementStdBounds.AutosizedMainDialog.WithAlignment(EnumDialogArea.CenterMiddle);
         ElementBounds bgBounds = ElementBounds.Fixed(0, 0, dialogWidth, bgHeight);
 
-        CairoFont titleFont = CairoFont.WhiteSmallishText();
-        CairoFont detailFont = CairoFont.WhiteDetailText().WithColor(FutureTextColor);
-        CairoFont countdownFont = CairoFont.WhiteDetailText().WithColor(FutureTextColor).WithOrientation(EnumTextOrientation.Right);
-        CairoFont pastDayFont = CairoFont.WhiteDetailText().WithColor(PastTextColor);
-        CairoFont todayDayFont = CairoFont.WhiteDetailText().WithColor(TodayTextColor);
-        CairoFont futureDayFont = CairoFont.WhiteDetailText().WithColor(FutureTextColor);
-
         SingleComposer?.Dispose();
 
         GuiComposer composer = capi.Gui
@@ -137,6 +160,7 @@ public sealed class GuiDialogCalendarHandbook : GuiDialog
             .AddShadedDialogBG(bgBounds)
             .AddDialogTitleBar(Lang.Get("calendarhandbook:dialog-title"), OnTitleBarClose)
             .AddStaticText(model.DateHeader, titleFont, dateBounds, "dateheader")
+            .AddDynamicText(model.TimeOfDay, clockFont, clockBounds, ClockKey)
             .AddStaticText(
                 Lang.Get("calendarhandbook:year-progress", model.ElapsedDays, model.DaysPerYear),
                 detailFont,
@@ -230,8 +254,15 @@ public sealed class GuiDialogCalendarHandbook : GuiDialog
             return;
         }
 
+        string clockText = model.TimeOfDay;
         string daysText = model.FormatDaysUntilLabel();
         string countdownText = FormatCountdownLabel(model);
+
+        if (force || clockText != lastClockText)
+        {
+            SingleComposer.GetDynamicText(ClockKey)?.SetNewText(clockText, false, true, false);
+            lastClockText = clockText;
+        }
 
         if (force || daysText != lastDaysUntilText)
         {

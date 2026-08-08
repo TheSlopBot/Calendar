@@ -23,6 +23,9 @@ public sealed class YearCalendarModel
     public EnumHemisphere Hemisphere { get; }
     public EnumSeason CurrentSeason { get; }
     public string LocalizedCurrentMonth { get; }
+    public float HourOfDay { get; }
+    public float HoursPerDay { get; }
+    public string TimeOfDay { get; }
     public string DateHeader { get; }
 
     public YearCalendarModel(ICoreClientAPI capi)
@@ -49,8 +52,20 @@ public sealed class YearCalendarModel
             CurrentSeason = calendar.GetSeason(pos);
         }
 
+        HoursPerDay = Math.Max(1f, calendar.HoursPerDay);
+        HourOfDay = calendar.HourOfDay;
+        TimeOfDay = FormatTimeOfDay(HourOfDay, HoursPerDay);
+
         LocalizedCurrentMonth = GetLocalizedMonth(MonthName);
         DateHeader = Lang.Get("calendarhandbook:current-date", DayOfMonth, LocalizedCurrentMonth, Year);
+    }
+
+    public static string FormatTimeOfDay(double hourOfDay, double hoursPerDay)
+    {
+        int minutesPerDay = Math.Max(1, (int)Math.Round(hoursPerDay)) * 60;
+        int totalMinutes = (int)Math.Floor(hourOfDay * 60.0);
+        totalMinutes = ((totalMinutes % minutesPerDay) + minutesPerDay) % minutesPerDay;
+        return string.Format("{0:D2}:{1:D2}", totalMinutes / 60, totalMinutes % 60);
     }
 
     public static string GetLocalizedMonth(EnumMonth monthName)
