@@ -1,0 +1,15 @@
+{
+  "$schema": "https://moddbcdn.vintagestory.at/schema/modinfo.latest.json",
+  "type": "code",
+  "side": "client",
+  "modid": "calendarhandbook",
+  "name": "Calendar Handbook",
+  "authors": [
+    "thejimmyblaze"
+  ],
+  "description": "Opens an in-game year calendar with season progress when you press L.",
+  "version": "1.0.0",
+  "dependencies": {
+    "game": "1.22.0"
+  }
+}

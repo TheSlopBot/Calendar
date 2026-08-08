@@ -1,0 +1,214 @@
+using System;
+using Vintagestory.API.Client;
+using Vintagestory.API.Common;
+using Vintagestory.API.Config;
+using Vintagestory.API.MathTools;
+
+namespace CalendarHandbook;
+
+public sealed class YearCalendarModel
+{
+    /// <summary>May / Second Seed: new worlds spawn here, so the month grids start on this month.</summary>
+    public const int DisplayStartMonth = 5;
+
+    private readonly ICoreClientAPI capi;
+
+    public int DaysPerMonth { get; }
+    public int DaysPerYear { get; }
+    public int DayOfYear { get; }
+    public int Month { get; }
+    public int DayOfMonth { get; }
+    public int Year { get; }
+    public EnumMonth MonthName { get; }
+    public EnumHemisphere Hemisphere { get; }
+    public EnumSeason CurrentSeason { get; }
+    public string LocalizedCurrentMonth { get; }
+    public string DateHeader { get; }
+
+    public YearCalendarModel(ICoreClientAPI capi)
+    {
+        this.capi = capi;
+        IGameCalendar calendar = capi.World.Calendar;
+        DaysPerMonth = Math.Max(1, calendar.DaysPerMonth);
+        DaysPerYear = Math.Max(DaysPerMonth * 12, calendar.DaysPerYear);
+        DayOfYear = Math.Clamp(calendar.DayOfYear, 0, Math.Max(0, DaysPerYear - 1));
+        Month = Math.Clamp((DayOfYear / DaysPerMonth) + 1, 1, 12);
+        MonthName = (EnumMonth)Month;
+        Year = calendar.Year;
+        DayOfMonth = (DayOfYear % DaysPerMonth) + 1;
+
+        BlockPos? pos = capi.World.Player?.Entity?.Pos?.AsBlockPos;
+        if (pos == null)
+        {
+            Hemisphere = EnumHemisphere.North;
+            CurrentSeason = EnumSeason.Spring;
+        }
+        else
+        {
+            Hemisphere = calendar.GetHemisphere(pos);
+            CurrentSeason = calendar.GetSeason(pos);
+        }
+
+        LocalizedCurrentMonth = GetLocalizedMonth(MonthName);
+        DateHeader = Lang.Get("calendarhandbook:current-date", DayOfMonth, LocalizedCurrentMonth, Year);
+    }
+
+    public static string GetLocalizedMonth(EnumMonth monthName)
+    {
+        return Lang.Get("month-" + monthName);
+    }
+
+    public static string GetLocalizedMonth(int month)
+    {
+        EnumMonth monthName = (EnumMonth)Math.Clamp(month, 1, 12);
+        return GetLocalizedMonth(monthName);
+    }
+
+    public CalendarSeason GetSeasonForMonth(int month)
+    {
+        return SeasonVisuals.GetSeasonForMonth(month, Hemisphere);
+    }
+
+    /// <summary>March in the north, September in the south — first month of spring.</summary>
+    public int SeasonalYearStartMonth => Hemisphere == EnumHemisphere.South ? 9 : 3;
+
+    public CalendarSeason CurrentCalendarSeason => GetSeasonForMonth(Month);
+
+    /// <summary>Winter normally; spring while it is already winter.</summary>
+    public CalendarSeason CountdownTargetSeason =>
+        CurrentCalendarSeason == CalendarSeason.Winter ? CalendarSeason.Spring : CalendarSeason.Winter;
+
+    public int GetFirstMonthOfSeason(CalendarSeason season)
+    {
+        for (int month = 1; month <= 12; month++)
+        {
+            if (GetSeasonForMonth(month) == season)
+            {
+                return month;
+            }
+        }
+
+        return 1;
+    }
+
+    public CalendarSeason[] GetDisplaySeasonOrder()
+    {
+        return SeasonVisuals.GetSeasonOrderFromMonth(SeasonalYearStartMonth, Hemisphere);
+    }
+
+    public int GetMonthAtDisplayIndex(int index)
+    {
+        return ((DisplayStartMonth - 1 + Math.Clamp(index, 0, 11)) % 12) + 1;
+    }
+
+    public int GetDisplayIndex(int month)
+    {
+        return (Math.Clamp(month, 1, 12) - DisplayStartMonth + 12) % 12;
+    }
+
+    public bool IsPastDay(int month, int day)
+    {
+        int displayIndex = GetDisplayIndex(month);
+        int currentIndex = GetDisplayIndex(Month);
+        if (displayIndex < currentIndex) return true;
+        if (displayIndex > currentIndex) return false;
+        return day < DayOfMonth;
+    }
+
+    public bool IsToday(int month, int day)
+    {
+        return month == Month && day == DayOfMonth;
+    }
+
+    public double YearProgress
+    {
+        get { return (double)ElapsedDays / DaysPerYear; }
+    }
+
+    public int ElapsedDays
+    {
+        get
+        {
+            int startDayIndex = (SeasonalYearStartMonth - 1) * DaysPerMonth;
+            int wrapped = (DayOfYear - startDayIndex + DaysPerYear) % DaysPerYear;
+            return wrapped + 1;
+        }
+    }
+
+    public int TargetSeasonStartDayOfYear
+    {
+        get
+        {
+            int month = GetFirstMonthOfSeason(CountdownTargetSeason);
+            return (month - 1) * DaysPerMonth;
+        }
+    }
+
+    public int DaysUntilTargetSeason
+    {
+        get
+        {
+            int delta = (TargetSeasonStartDayOfYear - DayOfYear + DaysPerYear) % DaysPerYear;
+            return delta;
+        }
+    }
+
+    public double RemainingGameDaysUntilTargetSeason
+    {
+        get
+        {
+            IGameCalendar calendar = capi.World.Calendar;
+            double dayOfYearf = calendar.DayOfYearf;
+            double delta = TargetSeasonStartDayOfYear - dayOfYearf;
+            if (delta <= 0)
+            {
+                delta += DaysPerYear;
+            }
+
+            return delta;
+        }
+    }
+
+    public double RealSecondsUntilTargetSeason
+    {
+        get
+        {
+            IGameCalendar calendar = capi.World.Calendar;
+            double hoursPerDay = Math.Max(0.0001, calendar.HoursPerDay);
+            double speed = Math.Max(0.0001, calendar.SpeedOfTime * calendar.CalendarSpeedMul);
+            return RemainingGameDaysUntilTargetSeason * hoursPerDay * 3600.0 / speed;
+        }
+    }
+
+    public string FormatDaysUntilLabel()
+    {
+        CalendarSeason target = CountdownTargetSeason;
+        string key = target == CalendarSeason.Spring
+            ? "calendarhandbook:days-until-spring"
+            : "calendarhandbook:days-until-winter";
+        return Lang.Get(key, DaysUntilTargetSeason);
+    }
+
+    public string FormatCountdownLabel()
+    {
+        CalendarSeason target = CountdownTargetSeason;
+        string key = target == CalendarSeason.Spring
+            ? "calendarhandbook:countdown-spring"
+            : "calendarhandbook:countdown-winter";
+        return Lang.Get(key, FormatCountdown(RealSecondsUntilTargetSeason));
+    }
+
+    public static string FormatCountdown(double totalSeconds)
+    {
+        if (double.IsNaN(totalSeconds) || double.IsInfinity(totalSeconds) || totalSeconds < 0)
+        {
+            totalSeconds = 0;
+        }
+
+        long seconds = (long)Math.Floor(totalSeconds);
+        long hours = seconds / 3600;
+        long minutes = (seconds % 3600) / 60;
+        long secs = seconds % 60;
+        return string.Format("{0:D2}:{1:D2}:{2:D2}", hours, minutes, secs);
+    }
+}

@@ -1,0 +1,21 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Launch Client (Debug)",
+      "type": "coreclr",
+      "request": "launch",
+      "program": "${env:VINTAGE_STORY}/Vintagestory.exe",
+      "preLaunchTask": "build",
+      "args": [
+        "--tracelog",
+        "--addModPath",
+        "${workspaceFolder}/calendarhandbook/bin/Debug/Mods",
+        "--addOrigin",
+        "${workspaceFolder}/calendarhandbook/assets"
+      ],
+      "console": "internalConsole",
+      "stopAtEntry": false
+    }
+  ]
+}
