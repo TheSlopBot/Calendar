@@ -17,7 +17,8 @@ public sealed class GuiDialogCalendarHandbook : GuiDialog
     private static readonly double[] FutureTextColor = { 0.95, 0.92, 0.84, 1.0 };
 
     private YearCalendarModel? model;
-    private long countdownTickListenerId = -1;
+    private double countdownSeconds;
+    private string lastCountdownText = "";
 
     public GuiDialogCalendarHandbook(ICoreClientAPI capi) : base(capi)
     {
@@ -39,18 +40,43 @@ public sealed class GuiDialogCalendarHandbook : GuiDialog
     {
         base.OnGuiOpened();
         ComposeDialog();
-        StartCountdownTicker();
     }
 
-    public override void OnGuiClosed()
+    public override void OnRenderGUI(float deltaTime)
     {
-        StopCountdownTicker();
-        base.OnGuiClosed();
+        base.OnRenderGUI(deltaTime);
+
+        if (!IsOpened() || SingleComposer == null || capi.World?.Calendar == null)
+        {
+            return;
+        }
+
+        countdownSeconds = Math.Max(0, countdownSeconds - deltaTime);
+        countdownRefreshTimer += deltaTime;
+
+        if (!capi.IsGamePaused && countdownRefreshTimer >= 1f)
+        {
+            countdownRefreshTimer = 0f;
+            model = new YearCalendarModel(capi);
+            countdownSeconds = model.RealSecondsUntilTargetSeason;
+            UpdateInfoTexts(force: true);
+            return;
+        }
+
+        if (countdownRefreshTimer >= 1f)
+        {
+            countdownRefreshTimer = 0f;
+            UpdateInfoTexts(force: true);
+        }
     }
 
     private void ComposeDialog()
     {
         model = new YearCalendarModel(capi);
+        countdownSeconds = model.RealSecondsUntilTargetSeason;
+        countdownRefreshTimer = 0f;
+        lastDaysUntilText = "";
+        lastCountdownText = "";
 
         const int left = 24;
         const int dateHeight = 28;
@@ -89,7 +115,7 @@ public sealed class GuiDialogCalendarHandbook : GuiDialog
         ElementBounds progressLabelBounds = ElementBounds.Fixed(left + gridsWidth - 170, dateY + 6, 170, 22);
         ElementBounds barBounds = ElementBounds.Fixed(left, barY, gridsWidth, barHeight);
         ElementBounds daysUntilBounds = ElementBounds.Fixed(left, infoY, gridsWidth / 2 - 8, infoRowHeight);
-        ElementBounds countdownBounds = ElementBounds.Fixed(left + gridsWidth - 320, infoY, 320, infoRowHeight);
+        ElementBounds countdownBounds = ElementBounds.Fixed(left + gridsWidth - 250, infoY, 250, infoRowHeight);
 
         int bgHeight = gridsY + gridsHeight + 20;
         ElementBounds dialogBounds = ElementStdBounds.AutosizedMainDialog.WithAlignment(EnumDialogArea.CenterMiddle);
@@ -97,6 +123,7 @@ public sealed class GuiDialogCalendarHandbook : GuiDialog
 
         CairoFont titleFont = CairoFont.WhiteSmallishText();
         CairoFont detailFont = CairoFont.WhiteDetailText().WithColor(FutureTextColor);
+        CairoFont countdownFont = CairoFont.WhiteDetailText().WithColor(FutureTextColor).WithOrientation(EnumTextOrientation.Right);
         CairoFont pastDayFont = CairoFont.WhiteDetailText().WithColor(PastTextColor);
         CairoFont todayDayFont = CairoFont.WhiteDetailText().WithColor(TodayTextColor);
         CairoFont futureDayFont = CairoFont.WhiteDetailText().WithColor(FutureTextColor);
@@ -132,7 +159,7 @@ public sealed class GuiDialogCalendarHandbook : GuiDialog
 
         composer
             .AddDynamicText(model.FormatDaysUntilLabel(), detailFont, daysUntilBounds, DaysUntilKey)
-            .AddDynamicText(model.FormatCountdownLabel(), detailFont, countdownBounds, CountdownKey);
+            .AddDynamicText(FormatCountdownLabel(model), countdownFont, countdownBounds, CountdownKey);
 
         for (int index = 0; index < 12; index++)
         {
@@ -191,45 +218,39 @@ public sealed class GuiDialogCalendarHandbook : GuiDialog
             bar.SetLineInterval(Math.Max(1, model.DaysPerMonth * 3));
         }
 
-        RefreshCountdownTexts();
+        UpdateInfoTexts(force: true);
     }
 
-    private void StartCountdownTicker()
+    private void UpdateInfoTexts(bool force)
     {
-        StopCountdownTicker();
-        countdownTickListenerId = capi.World.RegisterGameTickListener(OnCountdownTick, 250);
-    }
-
-    private void StopCountdownTicker()
-    {
-        if (countdownTickListenerId >= 0)
-        {
-            capi.World.UnregisterGameTickListener(countdownTickListenerId);
-            countdownTickListenerId = -1;
-        }
-    }
-
-    private void OnCountdownTick(float dt)
-    {
-        if (!IsOpened())
-        {
-            StopCountdownTicker();
-            return;
-        }
-
-        RefreshCountdownTexts();
-    }
-
-    private void RefreshCountdownTexts()
-    {
-        if (SingleComposer == null || capi.World?.Calendar == null)
+        if (SingleComposer == null || model == null)
         {
             return;
         }
 
-        model = new YearCalendarModel(capi);
-        SingleComposer.GetDynamicText(DaysUntilKey)?.SetNewText(model.FormatDaysUntilLabel(), false, false, false);
-        SingleComposer.GetDynamicText(CountdownKey)?.SetNewText(model.FormatCountdownLabel(), false, false, false);
+        string daysText = model.FormatDaysUntilLabel();
+        string countdownText = FormatCountdownLabel(model);
+
+        if (force || daysText != lastDaysUntilText)
+        {
+            SingleComposer.GetDynamicText(DaysUntilKey)?.SetNewText(daysText, false, true, false);
+            lastDaysUntilText = daysText;
+        }
+
+        if (force || countdownText != lastCountdownText)
+        {
+            SingleComposer.GetDynamicText(CountdownKey)?.SetNewText(countdownText, false, true, false);
+            lastCountdownText = countdownText;
+        }
+    }
+
+    private string FormatCountdownLabel(YearCalendarModel currentModel)
+    {
+        CalendarSeason target = currentModel.CountdownTargetSeason;
+        string key = target == CalendarSeason.Spring
+            ? "calendarhandbook:countdown-spring"
+            : "calendarhandbook:countdown-winter";
+        return Lang.Get(key, YearCalendarModel.FormatCountdown(countdownSeconds));
     }
 
     private void OnTitleBarClose()
