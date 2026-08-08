@@ -18,6 +18,8 @@ public sealed class GuiDialogCalendarHandbook : GuiDialog
 
     private YearCalendarModel? model;
     private double countdownSeconds;
+    private float countdownRefreshTimer;
+    private string lastDaysUntilText = "";
     private string lastCountdownText = "";
 
     public GuiDialogCalendarHandbook(ICoreClientAPI capi) : base(capi)
