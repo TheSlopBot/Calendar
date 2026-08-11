@@ -1,4 +1,6 @@
 using System;
+using System.Collections;
+using System.Reflection;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
@@ -93,17 +95,22 @@ public sealed class YearCalendarModel
     public CalendarSeason CountdownTargetSeason =>
         CurrentCalendarSeason == CalendarSeason.Winter ? CalendarSeason.Spring : CalendarSeason.Winter;
 
+    /// <summary>
+    /// First month of the season in seasonal-year order (spring start), so winter is
+    /// December in the north — not January, which is mid-winter on a Jan→Dec scan.
+    /// </summary>
     public int GetFirstMonthOfSeason(CalendarSeason season)
     {
-        for (int month = 1; month <= 12; month++)
+        for (int i = 0; i < 12; i++)
         {
+            int month = ((SeasonalYearStartMonth - 1 + i) % 12) + 1;
             if (GetSeasonForMonth(month) == season)
             {
                 return month;
             }
         }
 
-        return 1;
+        return SeasonalYearStartMonth;
     }
 
     public CalendarSeason[] GetDisplaySeasonOrder()
@@ -190,9 +197,39 @@ public sealed class YearCalendarModel
         {
             IGameCalendar calendar = capi.World.Calendar;
             double hoursPerDay = Math.Max(0.0001, calendar.HoursPerDay);
-            double speed = Math.Max(0.0001, calendar.SpeedOfTime * calendar.CalendarSpeedMul);
+            // SpeedOfTime is the sum of all modifiers. Sleep alone can add up to +17000, which
+            // would make "Spring in" show ~15 minutes for a full season. ETA must use baseline play speed.
+            double speed = Math.Max(0.0001, GetBaselineTimeSpeed(calendar) * calendar.CalendarSpeedMul);
             return RemainingGameDaysUntilTargetSeason * hoursPerDay * 3600.0 / speed;
         }
+    }
+
+    /// <summary>
+    /// Normal calendar tempo only (default 60). Ignores temporary modifiers such as sleep acceleration.
+    /// </summary>
+    public static float GetBaselineTimeSpeed(IGameCalendar calendar)
+    {
+        const float fallback = 60f;
+        try
+        {
+            PropertyInfo? prop = calendar.GetType().GetProperty("TimeSpeedModifiers");
+            if (prop?.GetValue(calendar) is IDictionary modifiers
+                && modifiers.Contains("baseline")
+                && modifiers["baseline"] is IConvertible convertible)
+            {
+                float baseline = Convert.ToSingle(convertible);
+                if (baseline > 0f)
+                {
+                    return baseline;
+                }
+            }
+        }
+        catch
+        {
+            // Concrete calendar type is not part of the public API; fall back to the game default.
+        }
+
+        return fallback;
     }
 
     public string FormatDaysUntilLabel()
