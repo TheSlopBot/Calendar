@@ -29,6 +29,8 @@ public sealed class YearCalendarModel
     public float HoursPerDay { get; }
     public string TimeOfDay { get; }
     public string DateHeader { get; }
+    /// <summary>Whole days elapsed since the world started (API ElapsedDays), not seasonal-year progress.</summary>
+    public int DaysSinceWorldStart { get; }
 
     public YearCalendarModel(ICoreClientAPI capi)
     {
@@ -41,6 +43,7 @@ public sealed class YearCalendarModel
         MonthName = (EnumMonth)Month;
         Year = calendar.Year;
         DayOfMonth = (DayOfYear % DaysPerMonth) + 1;
+        DaysSinceWorldStart = (int)Math.Floor(Math.Max(0.0, calendar.ElapsedDays));
 
         BlockPos? pos = capi.World.Player?.Entity?.Pos?.AsBlockPos;
         if (pos == null)

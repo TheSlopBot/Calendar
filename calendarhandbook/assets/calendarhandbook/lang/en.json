@@ -6,7 +6,7 @@
   "season-summer": "Summer",
   "season-autumn": "Autumn",
   "season-winter": "Winter",
-  "year-progress": "Day {0} of {1}",
+  "days-since-world-start": "Day {0}",
   "days-until-winter": "Days until winter: {0}",
   "days-until-spring": "Days until spring: {0}",
   "countdown-winter": "Winter in {0}",

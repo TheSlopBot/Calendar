@@ -144,7 +144,7 @@ public sealed class GuiDialogCalendarHandbook : GuiDialog
         dateBounds.fixedHeight = dateHeight;
 
         ElementBounds clockBounds = ElementBounds.Fixed(left + dateBounds.fixedWidth + ClockGap, dateY, 140, dateHeight);
-        ElementBounds progressLabelBounds = ElementBounds.Fixed(left + gridsWidth - 170, dateY + 6, 170, 22);
+        ElementBounds worldDaysBounds = ElementBounds.Fixed(left + gridsWidth - 170, dateY + 6, 170, 22);
         ElementBounds barBounds = ElementBounds.Fixed(left, barY, gridsWidth, barHeight);
         ElementBounds daysUntilBounds = ElementBounds.Fixed(left, infoY, gridsWidth / 2 - 8, infoRowHeight);
         ElementBounds countdownBounds = ElementBounds.Fixed(left + gridsWidth - 250, infoY, 250, infoRowHeight);
@@ -162,11 +162,11 @@ public sealed class GuiDialogCalendarHandbook : GuiDialog
             .AddStaticText(model.DateHeader, titleFont, dateBounds, "dateheader")
             .AddDynamicText(model.TimeOfDay, clockFont, clockBounds, ClockKey)
             .AddStaticText(
-                Lang.Get("calendarhandbook:year-progress", model.ElapsedDays, model.DaysPerYear),
+                Lang.Get("calendarhandbook:days-since-world-start", model.DaysSinceWorldStart),
                 detailFont,
                 EnumTextOrientation.Right,
-                progressLabelBounds,
-                "yearprogresslabel"
+                worldDaysBounds,
+                "worlddayslabel"
             )
             .AddStatbar(barBounds, SeasonVisuals.GetColor(model.GetSeasonForMonth(model.Month)), false, "yearbar");
 
