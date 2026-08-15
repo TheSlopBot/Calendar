@@ -13,7 +13,6 @@ public sealed class GuiDialogCalendarHandbook : GuiDialog
     private const string DaysUntilKey = "daysuntil";
     private const string CountdownKey = "seasoncountdown";
 
-    /// <summary>Unscaled px between the date header and the clock, roughly two spaces at the header font size.</summary>
     private const int ClockGap = 14;
 
     private static readonly double[] PastTextColor = { 0.55, 0.50, 0.42, 0.9 };
@@ -28,9 +27,7 @@ public sealed class GuiDialogCalendarHandbook : GuiDialog
     private string lastDaysUntilText = "";
     private string lastCountdownText = "";
 
-    public GuiDialogCalendarHandbook(ICoreClientAPI capi) : base(capi)
-    {
-    }
+    public GuiDialogCalendarHandbook(ICoreClientAPI capi) : base(capi) { }
 
     public override string ToggleKeyCombinationCode => HotkeyCode;
 
@@ -52,8 +49,7 @@ public sealed class GuiDialogCalendarHandbook : GuiDialog
 
     public override void OnGuiClosed()
     {
-        SingleComposer?.Dispose();
-        SingleComposer = null;
+        ClearComposers();
         model = null;
         base.OnGuiClosed();
     }
@@ -77,12 +73,10 @@ public sealed class GuiDialogCalendarHandbook : GuiDialog
 
         countdownRefreshTimer = 0f;
 
-        // While paused the calendar is frozen, so keep the last clock reading and only run the countdown down.
         if (!capi.IsGamePaused)
         {
             YearCalendarModel updated = new YearCalendarModel(capi);
 
-            // A day rollover moves the highlighted cell and can resize the date header, so rebuild the whole layout.
             if (model == null || updated.DayOfYear != model.DayOfYear || updated.Year != model.Year)
             {
                 ComposeDialog();
@@ -146,7 +140,6 @@ public sealed class GuiDialogCalendarHandbook : GuiDialog
         CairoFont todayDayFont = CairoFont.WhiteDetailText().WithColor(TodayTextColor);
         CairoFont futureDayFont = CairoFont.WhiteDetailText().WithColor(FutureTextColor);
 
-        // Shrink the date box to its text so the clock can sit right after it regardless of month name length.
         ElementBounds dateBounds = ElementBounds.Fixed(left, dateY, gridsWidth - 180, dateHeight);
         titleFont.AutoBoxSize(model.DateHeader, dateBounds, false);
         dateBounds.fixedHeight = dateHeight;
@@ -161,7 +154,7 @@ public sealed class GuiDialogCalendarHandbook : GuiDialog
         ElementBounds dialogBounds = ElementStdBounds.AutosizedMainDialog.WithAlignment(EnumDialogArea.CenterMiddle);
         ElementBounds bgBounds = ElementBounds.Fixed(0, 0, dialogWidth, bgHeight);
 
-        SingleComposer?.Dispose();
+        ClearComposers();
 
         GuiComposer composer = capi.Gui
             .CreateCompo(ComposerName, dialogBounds)
