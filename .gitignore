@@ -29,6 +29,7 @@ Desktop.ini
 ## Local scratch
 *.tmp
 *.temp
+/server-test/
 
 ## Downloaded ModDB reference zips
 /ref/
