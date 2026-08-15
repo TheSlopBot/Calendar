@@ -50,6 +50,14 @@ public sealed class GuiDialogCalendarHandbook : GuiDialog
         ComposeDialog();
     }
 
+    public override void OnGuiClosed()
+    {
+        SingleComposer?.Dispose();
+        SingleComposer = null;
+        model = null;
+        base.OnGuiClosed();
+    }
+
     public override void OnRenderGUI(float deltaTime)
     {
         base.OnRenderGUI(deltaTime);

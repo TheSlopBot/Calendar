@@ -1,7 +1,7 @@
 {
   "$schema": "https://moddbcdn.vintagestory.at/schema/modinfo.latest.json",
-  "type": "code",
-  "side": "client",
+  "type": "Code",
+  "side": "Client",
   "modid": "calendarhandbook",
   "name": "Calendar Handbook",
   "authors": [

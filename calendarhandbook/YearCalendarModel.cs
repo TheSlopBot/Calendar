@@ -10,7 +10,6 @@ namespace CalendarHandbook;
 
 public sealed class YearCalendarModel
 {
-    /// <summary>May / Second Seed: new worlds spawn here, so the month grids start on this month.</summary>
     public const int DisplayStartMonth = 5;
 
     private readonly ICoreClientAPI capi;
@@ -23,13 +22,11 @@ public sealed class YearCalendarModel
     public int Year { get; }
     public EnumMonth MonthName { get; }
     public EnumHemisphere Hemisphere { get; }
-    public EnumSeason CurrentSeason { get; }
     public string LocalizedCurrentMonth { get; }
     public float HourOfDay { get; }
     public float HoursPerDay { get; }
     public string TimeOfDay { get; }
     public string DateHeader { get; }
-    /// <summary>Whole days elapsed since the world started (API ElapsedDays), not seasonal-year progress.</summary>
     public int DaysSinceWorldStart { get; }
 
     public YearCalendarModel(ICoreClientAPI capi)
@@ -39,23 +36,14 @@ public sealed class YearCalendarModel
         DaysPerMonth = Math.Max(1, calendar.DaysPerMonth);
         DaysPerYear = Math.Max(DaysPerMonth * 12, calendar.DaysPerYear);
         DayOfYear = Math.Clamp(calendar.DayOfYear, 0, Math.Max(0, DaysPerYear - 1));
-        Month = Math.Clamp((DayOfYear / DaysPerMonth) + 1, 1, 12);
-        MonthName = (EnumMonth)Month;
+        Month = Math.Clamp(calendar.Month, 1, 12);
+        MonthName = calendar.MonthName;
         Year = calendar.Year;
         DayOfMonth = (DayOfYear % DaysPerMonth) + 1;
         DaysSinceWorldStart = (int)Math.Floor(Math.Max(0.0, calendar.ElapsedDays));
 
         BlockPos? pos = capi.World.Player?.Entity?.Pos?.AsBlockPos;
-        if (pos == null)
-        {
-            Hemisphere = EnumHemisphere.North;
-            CurrentSeason = EnumSeason.Spring;
-        }
-        else
-        {
-            Hemisphere = calendar.GetHemisphere(pos);
-            CurrentSeason = calendar.GetSeason(pos);
-        }
+        Hemisphere = pos == null ? EnumHemisphere.North : calendar.GetHemisphere(pos);
 
         HoursPerDay = Math.Max(1f, calendar.HoursPerDay);
         HourOfDay = calendar.HourOfDay;
@@ -89,19 +77,13 @@ public sealed class YearCalendarModel
         return SeasonVisuals.GetSeasonForMonth(month, Hemisphere);
     }
 
-    /// <summary>March in the north, September in the south — first month of spring.</summary>
     public int SeasonalYearStartMonth => Hemisphere == EnumHemisphere.South ? 9 : 3;
 
     public CalendarSeason CurrentCalendarSeason => GetSeasonForMonth(Month);
 
-    /// <summary>Winter normally; spring while it is already winter.</summary>
     public CalendarSeason CountdownTargetSeason =>
         CurrentCalendarSeason == CalendarSeason.Winter ? CalendarSeason.Spring : CalendarSeason.Winter;
 
-    /// <summary>
-    /// First month of the season in seasonal-year order (spring start), so winter is
-    /// December in the north — not January, which is mid-winter on a Jan→Dec scan.
-    /// </summary>
     public int GetFirstMonthOfSeason(CalendarSeason season)
     {
         for (int i = 0; i < 12; i++)
@@ -200,22 +182,20 @@ public sealed class YearCalendarModel
         {
             IGameCalendar calendar = capi.World.Calendar;
             double hoursPerDay = Math.Max(0.0001, calendar.HoursPerDay);
-            // SpeedOfTime is the sum of all modifiers. Sleep alone can add up to +17000, which
-            // would make "Spring in" show ~15 minutes for a full season. ETA must use baseline play speed.
             double speed = Math.Max(0.0001, GetBaselineTimeSpeed(calendar) * calendar.CalendarSpeedMul);
             return RemainingGameDaysUntilTargetSeason * hoursPerDay * 3600.0 / speed;
         }
     }
 
-    /// <summary>
-    /// Normal calendar tempo only (default 60). Ignores temporary modifiers such as sleep acceleration.
-    /// </summary>
     public static float GetBaselineTimeSpeed(IGameCalendar calendar)
     {
         const float fallback = 60f;
         try
         {
-            PropertyInfo? prop = calendar.GetType().GetProperty("TimeSpeedModifiers");
+            PropertyInfo? prop = calendar.GetType().GetProperty(
+                "TimeSpeedModifiers",
+                BindingFlags.Instance | BindingFlags.Public
+            );
             if (prop?.GetValue(calendar) is IDictionary modifiers
                 && modifiers.Contains("baseline")
                 && modifiers["baseline"] is IConvertible convertible)
@@ -227,10 +207,7 @@ public sealed class YearCalendarModel
                 }
             }
         }
-        catch
-        {
-            // Concrete calendar type is not part of the public API; fall back to the game default.
-        }
+        catch (Exception) { }
 
         return fallback;
     }
@@ -242,15 +219,6 @@ public sealed class YearCalendarModel
             ? "calendarhandbook:days-until-spring"
             : "calendarhandbook:days-until-winter";
         return Lang.Get(key, DaysUntilTargetSeason);
-    }
-
-    public string FormatCountdownLabel()
-    {
-        CalendarSeason target = CountdownTargetSeason;
-        string key = target == CalendarSeason.Spring
-            ? "calendarhandbook:countdown-spring"
-            : "calendarhandbook:countdown-winter";
-        return Lang.Get(key, FormatCountdown(RealSecondsUntilTargetSeason));
     }
 
     public static string FormatCountdown(double totalSeconds)

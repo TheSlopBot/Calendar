@@ -85,13 +85,14 @@ public static class SeasonVisuals
 
     public static string GetMarker(CalendarSeason season)
     {
-        return season switch
+        string key = season switch
         {
-            CalendarSeason.Spring => "+",
-            CalendarSeason.Summer => "*",
-            CalendarSeason.Autumn => "~",
-            _ => "o"
+            CalendarSeason.Spring => "calendarhandbook:season-marker-spring",
+            CalendarSeason.Summer => "calendarhandbook:season-marker-summer",
+            CalendarSeason.Autumn => "calendarhandbook:season-marker-autumn",
+            _ => "calendarhandbook:season-marker-winter"
         };
+        return Lang.Get(key);
     }
 
     public static string GetLangKey(CalendarSeason season)

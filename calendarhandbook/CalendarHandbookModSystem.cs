@@ -25,4 +25,20 @@ public sealed class CalendarHandbookModSystem : ModSystem
         api.Gui.RegisterDialog(dialog);
         api.Logger.Notification("[calendarhandbook] Client started. Press L to open the year calendar.");
     }
+
+    public override void Dispose()
+    {
+        if (dialog != null)
+        {
+            if (dialog.IsOpened())
+            {
+                dialog.TryClose();
+            }
+
+            dialog.Dispose();
+            dialog = null;
+        }
+
+        base.Dispose();
+    }
 }
