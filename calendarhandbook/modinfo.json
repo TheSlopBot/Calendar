@@ -10,7 +10,7 @@
     "thejimmyblaze"
   ],
   "description": "Opens an in-game year calendar with season progress when you press L.",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "dependencies": {
     "game": "1.22.0"
   }

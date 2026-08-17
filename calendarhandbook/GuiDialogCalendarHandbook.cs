@@ -21,13 +21,17 @@ public sealed class GuiDialogCalendarHandbook : GuiDialog
     private static readonly double[] ClockTextColor = { 0.96, 0.89, 0.73, 1.0 };
 
     private YearCalendarModel? model;
+    private readonly Func<ICalendarSolver> getSolver;
     private double countdownSeconds;
     private float countdownRefreshTimer;
     private string lastClockText = "";
     private string lastDaysUntilText = "";
     private string lastCountdownText = "";
 
-    public GuiDialogCalendarHandbook(ICoreClientAPI capi) : base(capi) { }
+    public GuiDialogCalendarHandbook(ICoreClientAPI capi, Func<ICalendarSolver> getSolver) : base(capi)
+    {
+        this.getSolver = getSolver;
+    }
 
     public override string ToggleKeyCombinationCode => HotkeyCode;
 
@@ -75,7 +79,7 @@ public sealed class GuiDialogCalendarHandbook : GuiDialog
 
         if (!capi.IsGamePaused)
         {
-            YearCalendarModel updated = new YearCalendarModel(capi);
+            YearCalendarModel updated = new YearCalendarModel(capi, getSolver());
 
             if (model == null || updated.DayOfYear != model.DayOfYear || updated.Year != model.Year)
             {
@@ -92,7 +96,7 @@ public sealed class GuiDialogCalendarHandbook : GuiDialog
 
     private void ComposeDialog()
     {
-        model = new YearCalendarModel(capi);
+        model = new YearCalendarModel(capi, getSolver());
         countdownSeconds = model.RealSecondsUntilTargetSeason;
         countdownRefreshTimer = 0f;
         lastClockText = "";
@@ -126,7 +130,7 @@ public sealed class GuiDialogCalendarHandbook : GuiDialog
         int graphBottom = infoY + infoRowHeight;
         int gridsY = graphBottom + dateY;
 
-        int dayRows = Math.Max(1, (int)Math.Ceiling(model.DaysPerMonth / 7.0));
+        int dayRows = Math.Max(1, (int)Math.Ceiling(model.MaxDaysInMonth / 7.0));
         int monthInnerHeight = monthTitleHeight + 6 + dayRows * (dayCell + dayGap);
         int gridsWidth = monthsPerRow * monthWidth + (monthsPerRow - 1) * monthGapX;
         int gridsHeight = monthRows * monthInnerHeight + (monthRows - 1) * monthGapY;
@@ -199,13 +203,14 @@ public sealed class GuiDialogCalendarHandbook : GuiDialog
 
             composer.AddInset(ElementBounds.Fixed(mx, my, monthWidth, monthInnerHeight), 2);
             composer.AddStaticText(
-                SeasonVisuals.GetMarker(monthSeason) + " " + YearCalendarModel.GetLocalizedMonth(month),
+                SeasonVisuals.GetMarker(monthSeason) + " " + model.GetMonthTitle(month),
                 CairoFont.WhiteSmallText().WithColor(SeasonVisuals.GetColor(monthSeason)),
                 ElementBounds.Fixed(mx + 8, my + 4, monthWidth - 16, monthTitleHeight),
                 "monthtitle" + month
             );
 
-            for (int day = 1; day <= model.DaysPerMonth; day++)
+            int daysInMonth = model.GetDaysInMonth(month);
+            for (int day = 1; day <= daysInMonth; day++)
             {
                 int dayIndex = day - 1;
                 int dayCol = dayIndex % 7;
@@ -241,8 +246,8 @@ public sealed class GuiDialogCalendarHandbook : GuiDialog
         GuiElementStatbar? bar = SingleComposer.GetStatbar("yearbar");
         if (bar != null)
         {
+            bar.SetLineInterval(Math.Max(1, model.DaysPerYear / 4f));
             bar.SetValues(model.ElapsedDays, 0, model.DaysPerYear);
-            bar.SetLineInterval(Math.Max(1, model.DaysPerMonth * 3));
         }
 
         UpdateInfoTexts(force: true);

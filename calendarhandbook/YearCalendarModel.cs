@@ -13,6 +13,7 @@ public sealed class YearCalendarModel
     public const int DisplayStartMonth = 5;
 
     private readonly ICoreClientAPI capi;
+    private readonly ICalendarSolver solver;
 
     public int DaysPerMonth { get; }
     public int DaysPerYear { get; }
@@ -29,17 +30,18 @@ public sealed class YearCalendarModel
     public string DateHeader { get; }
     public int DaysSinceWorldStart { get; }
 
-    public YearCalendarModel(ICoreClientAPI capi)
+    public YearCalendarModel(ICoreClientAPI capi, ICalendarSolver solver)
     {
         this.capi = capi;
+        this.solver = solver;
         IGameCalendar calendar = capi.World.Calendar;
         DaysPerMonth = Math.Max(1, calendar.DaysPerMonth);
         DaysPerYear = Math.Max(DaysPerMonth * 12, calendar.DaysPerYear);
-        DayOfYear = Math.Clamp(calendar.DayOfYear, 0, Math.Max(0, DaysPerYear - 1));
+        DayOfYear = Math.Max(0, calendar.DayOfYear);
         Month = Math.Clamp(calendar.Month, 1, 12);
         MonthName = calendar.MonthName;
         Year = calendar.Year;
-        DayOfMonth = (DayOfYear % DaysPerMonth) + 1;
+        DayOfMonth = GameCalendarValues.ReadDayOfMonth(calendar, DaysPerMonth);
         DaysSinceWorldStart = (int)Math.Floor(Math.Max(0.0, calendar.ElapsedDays));
 
         BlockPos? pos = capi.World.Player?.Entity?.Pos?.AsBlockPos;
@@ -49,8 +51,34 @@ public sealed class YearCalendarModel
         HourOfDay = calendar.HourOfDay;
         TimeOfDay = FormatTimeOfDay(HourOfDay, HoursPerDay);
 
-        LocalizedCurrentMonth = GetLocalizedMonth(MonthName);
+        LocalizedCurrentMonth = GetMonthTitle(Month);
         DateHeader = Lang.Get("calendarhandbook:current-date", DayOfMonth, LocalizedCurrentMonth, Year);
+
+        int longest = 1;
+        for (int month = 1; month <= 12; month++)
+        {
+            longest = Math.Max(longest, GetDaysInMonth(month));
+        }
+
+        MaxDaysInMonth = longest;
+    }
+
+    public int MaxDaysInMonth { get; }
+
+    public int GetDaysInMonth(int month)
+    {
+        return Math.Max(1, solver.GetDaysInMonth(month, Year));
+    }
+
+    public string GetMonthTitle(int month)
+    {
+        string? custom = solver.GetMonthDisplayName(month);
+        if (!string.IsNullOrWhiteSpace(custom))
+        {
+            return custom;
+        }
+
+        return GetLocalizedMonth(month);
     }
 
     public static string FormatTimeOfDay(double hourOfDay, double hoursPerDay)
@@ -136,7 +164,7 @@ public sealed class YearCalendarModel
     {
         get
         {
-            int startDayIndex = (SeasonalYearStartMonth - 1) * DaysPerMonth;
+            int startDayIndex = solver.GetStartDayOfYear(SeasonalYearStartMonth, Year);
             int wrapped = (DayOfYear - startDayIndex + DaysPerYear) % DaysPerYear;
             return wrapped + 1;
         }
@@ -147,7 +175,7 @@ public sealed class YearCalendarModel
         get
         {
             int month = GetFirstMonthOfSeason(CountdownTargetSeason);
-            return (month - 1) * DaysPerMonth;
+            return solver.GetStartDayOfYear(month, Year);
         }
     }
 
