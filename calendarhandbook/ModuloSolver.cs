@@ -3,10 +3,6 @@ using Vintagestory.API.Common;
 
 namespace CalendarHandbook;
 
-/// <summary>
-/// Vanilla-style equal months. Off-current months use <see cref="IGameCalendar.DaysPerMonth"/>;
-/// the current month grows to fit the reported day of month.
-/// </summary>
 public sealed class ModuloSolver : ICalendarSolver
 {
     private readonly IGameCalendar calendar;

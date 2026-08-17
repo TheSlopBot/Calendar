@@ -4,23 +4,14 @@ using Vintagestory.API.Common;
 
 namespace CalendarHandbook;
 
-/// <summary>
-/// Describes the year picture: how long each month is. Does not replace "what day is it now."
-/// </summary>
 public interface ICalendarSolver
 {
     int MonthCount { get; }
 
     int GetDaysInMonth(int month, int year);
 
-    /// <summary>
-    /// 0-based day of year of the 1st of <paramref name="month"/>.
-    /// </summary>
     int GetStartDayOfYear(int month, int year);
 
-    /// <summary>
-    /// Config/calendar month title, or null to use vanilla <c>month-*</c> lang.
-    /// </summary>
     string? GetMonthDisplayName(int month);
 }
 

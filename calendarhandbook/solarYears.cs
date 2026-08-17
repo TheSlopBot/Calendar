@@ -12,10 +12,21 @@ public sealed class SolarYearsSolver : ICalendarSolver
 {
     public const string ConfigKey = "SolarYearsConfiguration";
 
-    public static bool SolarYearsInstalled(ICoreAPI api)
-    {
-        return api.ModLoader.IsModEnabled("solaryears");
-    }
+    private static readonly SolarMonthDto[] ConstructorMonths =
+    [
+        new() { Name = "January", Length = 31 },
+        new() { Name = "February", Length = 28 },
+        new() { Name = "March", Length = 31 },
+        new() { Name = "April", Length = 30 },
+        new() { Name = "May", Length = 31 },
+        new() { Name = "June", Length = 30 },
+        new() { Name = "July", Length = 31 },
+        new() { Name = "August", Length = 31 },
+        new() { Name = "September", Length = 30 },
+        new() { Name = "October", Length = 31 },
+        new() { Name = "November", Length = 30 },
+        new() { Name = "December", Length = 31 }
+    ];
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -26,34 +37,29 @@ public sealed class SolarYearsSolver : ICalendarSolver
     };
 
     private readonly string[] monthNames;
-    private readonly int[] baseLengths;
-    private readonly bool[] leapPeriod;
-    private readonly int leapMonthIndex;
-    private readonly int extraLeapDays;
+    private readonly int[] monthSizes;
+    private readonly int[] monthStarts;
 
-    private SolarYearsSolver(
-        string[] monthNames,
-        int[] baseLengths,
-        bool[] leapPeriod,
-        int leapMonthIndex,
-        int extraLeapDays
-    )
+    private SolarYearsSolver(string[] monthNames, int[] monthSizes, int[] monthStarts)
     {
         this.monthNames = monthNames;
-        this.baseLengths = baseLengths;
-        this.leapPeriod = leapPeriod;
-        this.leapMonthIndex = leapMonthIndex;
-        this.extraLeapDays = extraLeapDays;
+        this.monthSizes = monthSizes;
+        this.monthStarts = monthStarts;
     }
 
-    public int MonthCount => baseLengths.Length;
+    public int MonthCount => monthSizes.Length;
+
+    public static bool SolarYearsInstalled(ICoreAPI api)
+    {
+        return api.ModLoader.IsModEnabled("solaryears");
+    }
 
     public static SolarYearsSolver? Create(ICoreClientAPI capi)
     {
         try
         {
             string? encoded = capi.World?.Config?.GetString(ConfigKey);
-            if (string.IsNullOrWhiteSpace(encoded))
+            if (encoded == null)
             {
                 return null;
             }
@@ -85,12 +91,12 @@ public sealed class SolarYearsSolver : ICalendarSolver
             return null;
         }
 
-        if (config?.Months == null)
+        if (config == null)
         {
             return null;
         }
 
-        List<SolarMonthDto> months = TakeRealMonths(config.Months);
+        List<SolarMonthDto> months = DropConstructorPrefix(ConstructorMonths, config.Months, 12);
         if (months.Count != 12)
         {
             return null;
@@ -101,49 +107,40 @@ public sealed class SolarYearsSolver : ICalendarSolver
         for (int i = 0; i < 12; i++)
         {
             SolarMonthDto month = months[i];
-            if (month == null || string.IsNullOrWhiteSpace(month.Name) || month.Length < 1)
+            if (month?.Name == null)
             {
                 return null;
             }
 
-            names[i] = month.Name.Trim();
+            names[i] = month.Name;
             lengths[i] = month.Length;
         }
 
-        bool[] period = TakeLeapPeriod(config.LeapSystem?.Period);
-        int extraDays = Math.Max(0, config.LeapSystem?.DaysToAdd ?? 0);
-        int leapIndex = FindLeapMonthIndex(names, config.LeapSystem?.MonthToAdd);
-        if (extraDays == 0 || leapIndex < 0)
+        string monthToAdd = config.LeapSystem?.MonthToAdd ?? "February";
+        int daysToAdd = config.LeapSystem?.DaysToAdd ?? 1;
+        int leapMonth = FindLeapMonthIndex(names, monthToAdd);
+        if (leapMonth < 0)
         {
-            extraDays = 0;
-            leapIndex = -1;
+            return null;
         }
 
-        return new SolarYearsSolver(names, lengths, period, leapIndex, extraDays);
+        lengths[leapMonth] += daysToAdd;
+
+        return new SolarYearsSolver(names, lengths, CumulativeSum(lengths));
     }
 
     public int GetDaysInMonth(int month, int year)
     {
+        _ = year;
         int index = Math.Clamp(month, 1, MonthCount) - 1;
-        int days = baseLengths[index];
-        if (IsLeapYear(year) && index == leapMonthIndex)
-        {
-            days += extraLeapDays;
-        }
-
-        return days;
+        return monthSizes[index];
     }
 
     public int GetStartDayOfYear(int month, int year)
     {
-        int clamped = Math.Clamp(month, 1, MonthCount);
-        int start = 0;
-        for (int m = 1; m < clamped; m++)
-        {
-            start += GetDaysInMonth(m, year);
-        }
-
-        return start;
+        _ = year;
+        int index = Math.Clamp(month, 1, MonthCount) - 1;
+        return monthStarts[index];
     }
 
     public string? GetMonthDisplayName(int month)
@@ -152,57 +149,45 @@ public sealed class SolarYearsSolver : ICalendarSolver
         return monthNames[index];
     }
 
-    private bool IsLeapYear(int year)
+    private static List<T> DropConstructorPrefix<T>(IReadOnlyList<T> constructorItems, List<T>? jsonItems, int prefix)
     {
-        if (leapPeriod.Length == 0 || extraLeapDays <= 0 || leapMonthIndex < 0)
+        var merged = new List<T>(constructorItems);
+        if (jsonItems != null)
         {
-            return false;
+            merged.AddRange(jsonItems);
         }
 
-        int index = year % leapPeriod.Length;
-        if (index < 0)
+        if (merged.Count < prefix)
         {
-            index += leapPeriod.Length;
+            return new List<T>();
         }
 
-        return leapPeriod[index];
+        return merged.GetRange(prefix, merged.Count - prefix);
     }
 
-    private static List<SolarMonthDto> TakeRealMonths(List<SolarMonthDto> months)
+    private static int[] CumulativeSum(int[] monthSizes)
     {
-        if (months.Count > 12)
+        var starts = new int[monthSizes.Length];
+        int acc = 0;
+        for (int i = 0; i < monthSizes.Length; i++)
         {
-            return months.GetRange(months.Count - 12, 12);
+            starts[i] = acc;
+            acc += monthSizes[i];
         }
 
-        return months;
-    }
-
-    private static bool[] TakeLeapPeriod(List<bool>? period)
-    {
-        if (period == null || period.Count == 0)
-        {
-            return Array.Empty<bool>();
-        }
-
-        if (period.Count > 4)
-        {
-            return period.GetRange(period.Count - 4, 4).ToArray();
-        }
-
-        return period.ToArray();
+        return starts;
     }
 
     private static int FindLeapMonthIndex(string[] names, string? monthToAdd)
     {
-        if (string.IsNullOrWhiteSpace(monthToAdd))
+        if (monthToAdd == null)
         {
             return -1;
         }
 
         for (int i = 0; i < names.Length; i++)
         {
-            if (string.Equals(names[i], monthToAdd.Trim(), StringComparison.OrdinalIgnoreCase))
+            if (names[i].Equals(monthToAdd))
             {
                 return i;
             }
@@ -239,5 +224,5 @@ internal sealed class SolarLeapSystemDto
     public string? MonthToAdd { get; set; }
 
     [JsonPropertyName("DaysToAdd")]
-    public int DaysToAdd { get; set; }
+    public int? DaysToAdd { get; set; }
 }
